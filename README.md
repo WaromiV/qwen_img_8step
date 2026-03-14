@@ -28,7 +28,7 @@ Queue-based RunPod Serverless worker for `Qwen/Qwen-Image-Edit-2511`.
 - Accepts `image_base64`, `image_url`, `image_path`, or `images`
 - Returns base64 output in JSON
 - Uses `/runpod-volume/huggingface` automatically when a network volume is mounted
-- Defaults to `OFFLOAD_MODE=model` so it is runnable on 24 GB class GPUs
+- CPU offloading is disabled and the pipeline is hardcoded to run on GPU only
 
 ## Input Shape
 
@@ -82,7 +82,7 @@ For multi-image editing:
 ## Runtime Environment
 
 - `MODEL_ID` defaults to `Qwen/Qwen-Image-Edit-2511`
-- `OFFLOAD_MODE` can be `model`, `sequential`, or `none`
+- `OFFLOAD_MODE` is effectively hardcoded to `none` in code; CPU offloading is disabled
 - `PRELOAD_MODEL=1` preloads on worker startup; default is `0`
 - `HF_HOME`, `HUGGINGFACE_HUB_CACHE`, `TRANSFORMERS_CACHE` should point at `/runpod-volume/...` when using a network volume
 - `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True` is set in the Docker image to reduce fragmentation issues
@@ -93,7 +93,7 @@ For multi-image editing:
 - Container disk: at least `40 GB`
 - Network volume: attach one and mount it
 - `HF_TOKEN`: required if model access is gated in your account context
-- `OFFLOAD_MODE=model` for 24 GB cards; try `none` only on larger GPUs
+- Use a GPU tier with enough VRAM because CPU offloading is disabled
 
 ## Local Test
 

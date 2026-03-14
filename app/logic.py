@@ -10,7 +10,7 @@ from diffusers import QwenImageEditPlusPipeline
 from PIL import Image
 
 MODEL_ID = os.getenv("MODEL_ID", "Qwen/Qwen-Image-Edit-2511")
-OFFLOAD_MODE = os.getenv("OFFLOAD_MODE", "model")
+OFFLOAD_MODE = "none"
 RUNPOD_VOLUME = Path(os.getenv("RUNPOD_VOLUME", "/runpod-volume"))
 
 if RUNPOD_VOLUME.exists():
@@ -45,16 +45,8 @@ def _enable_memory_helpers(pipe: QwenImageEditPlusPipeline) -> None:
 
 
 def _configure_pipeline(pipe: QwenImageEditPlusPipeline) -> QwenImageEditPlusPipeline:
-    if OFFLOAD_MODE == "none":
-        pipe.to("cuda")
-    elif OFFLOAD_MODE == "model":
-        pipe.enable_model_cpu_offload()
-        _enable_memory_helpers(pipe)
-    elif OFFLOAD_MODE == "sequential":
-        pipe.enable_sequential_cpu_offload()
-        _enable_memory_helpers(pipe)
-    else:
-        raise RuntimeError(f"Invalid OFFLOAD_MODE={OFFLOAD_MODE}")
+    pipe.to("cuda")
+    _enable_memory_helpers(pipe)
     pipe.set_progress_bar_config(disable=None)
     return pipe
 

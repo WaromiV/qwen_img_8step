@@ -7,7 +7,7 @@ ENV PYTHONUNBUFFERED=1 \
     HUGGINGFACE_HUB_CACHE=/runpod-volume/huggingface/hub \
     TRANSFORMERS_CACHE=/runpod-volume/huggingface/hub \
     MODEL_ID=Qwen/Qwen-Image-Edit-2511 \
-    OFFLOAD_MODE=model \
+    OFFLOAD_MODE=none \
     PRELOAD_MODEL=0
 
 WORKDIR /app

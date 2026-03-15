@@ -15,6 +15,7 @@ This repo no longer uses Diffusers.
 - Text encoder: `qwen_2.5_vl_7b_fp8_scaled.safetensors`
 - VAE: `qwen_image_vae.safetensors`
 - Base image: `runpod/worker-comfyui:5.5.1-base`
+- Custom node source: `blepping/ComfyUI-GGUF` `feat_optimized_dequant`
 
 ## Repo Layout
 
@@ -97,6 +98,13 @@ Accepted image inputs:
 - Container disk: `40 GB+`
 - Network volume: attach one if you want persistent downloaded models; default cache path is `/runpod-volume/huggingface/qwen-image-edit-2511-gguf`
 - `PRELOAD_MODEL=0` for easier startup; set `1` only if you intentionally keep workers warm
+
+## Performance Notes
+
+- `PRELOAD_MODEL` now defaults to `1` so ComfyUI is started before the first job instead of inside request execution
+- ComfyUI now starts with `--highvram`
+- The workflow now uses `UnetLoaderGGUFAdvanced` with `optimize=triton` and `dequant_dtype=float16`
+- This is aimed at reducing the dequantization overhead that makes `Q2_K` look much slower than its file size suggests
 
 ## Pod Volume Notes
 

@@ -15,9 +15,13 @@
     }
   },
   "3": {
-    "class_type": "UnetLoaderGGUF",
+    "class_type": "UnetLoaderGGUFAdvanced",
     "inputs": {
-      "unet_name": "qwen-image-edit-2511-Q2_K.gguf"
+      "unet_name": "qwen-image-edit-2511-Q2_K.gguf",
+      "dequant_dtype": "float16",
+      "patch_dtype": "default",
+      "patch_on_device": false,
+      "optimize": "triton"
     }
   },
   "4": {

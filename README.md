@@ -15,7 +15,7 @@ This repo no longer uses Diffusers.
 - Text encoder: `qwen_2.5_vl_7b_fp8_scaled.safetensors`
 - VAE: `qwen_image_vae.safetensors`
 - Base image: `runpod/worker-comfyui:5.5.1-base`
-- Custom node source: `blepping/ComfyUI-GGUF` `feat_optimized_dequant`
+- Custom node source: `city96/ComfyUI-GGUF`
 
 ## Repo Layout
 
@@ -103,9 +103,9 @@ Accepted image inputs:
 
 - `PRELOAD_MODEL` now defaults to `1` so ComfyUI is started before the first job instead of inside request execution
 - ComfyUI now starts with `--highvram`
-- The workflow now uses `UnetLoaderGGUFAdvanced` with `optimize=triton` and `dequant_dtype=float16`
-- The Docker image now installs `build-essential` and `python3-dev`, sets `CC`/`CXX`, and creates a `libcuda.so` symlink at startup if only `libcuda.so.1` is present
-- This is aimed at reducing the dequantization overhead that makes `Q2_K` look much slower than its file size suggests
+- The workflow now uses `UnetLoaderGGUFAdvanced` with `optimize=none` and `dequant_dtype=float16`
+- The Docker image still carries compiler/runtime prerequisites, but Triton optimization is disabled because it is failing to compile reliably in this deployment
+- This favors a stable working GGUF path over the experimental Triton branch
 
 ## Pod Volume Notes
 

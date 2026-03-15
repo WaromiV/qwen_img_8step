@@ -26,7 +26,7 @@ COPY requirements.txt /app/requirements.txt
 RUN pip install --upgrade pip setuptools wheel && \
     pip install -r /app/requirements.txt && \
     rm -rf /comfyui/custom_nodes/ComfyUI-GGUF && \
-    git clone --depth=1 --branch feat_optimized_dequant https://github.com/blepping/ComfyUI-GGUF /comfyui/custom_nodes/ComfyUI-GGUF && \
+    git clone --depth=1 https://github.com/city96/ComfyUI-GGUF /comfyui/custom_nodes/ComfyUI-GGUF && \
     pip install -r /comfyui/custom_nodes/ComfyUI-GGUF/requirements.txt
 
 COPY handler.py /app/handler.py

@@ -21,7 +21,7 @@
       "dequant_dtype": "float16",
       "patch_dtype": "default",
       "patch_on_device": false,
-      "optimize": "triton"
+      "optimize": "none"
     }
   },
   "4": {

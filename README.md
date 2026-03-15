@@ -110,3 +110,5 @@ Accepted image inputs:
 - This repo mandates the `Q2_K` GGUF variant for maximum compression
 - Current workflow is single-image edit only
 - It uses ComfyUI native Qwen edit nodes and swaps the stock model loader for `UnetLoaderGGUF`
+
+Release trigger note: this line exists to force a fresh RunPod rebuild when needed.

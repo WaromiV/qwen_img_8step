@@ -783,7 +783,16 @@ def _summarize_history_error(history: dict) -> dict:
 
 def _extract_image_metadata(history: dict, *, request_id=None, prompt_id=None) -> dict:
     outputs = history.get("outputs") or {}
-    images = (outputs.get("15") or {}).get("images") or []
+    images = []
+    preferred_node = "15"
+    if preferred_node in outputs:
+        images = (outputs[preferred_node] or {}).get("images") or []
+    else:
+        for node_id, data in outputs.items():
+            if data and data.get("images"):
+                images = data.get("images")
+                preferred_node = node_id
+                break
     if not images:
         summary = _summarize_history_error(history)
         log_event(

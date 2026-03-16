@@ -557,6 +557,13 @@ def _patch_workflow(
 def _submit_prompt(workflow: dict, *, request_id=None) -> str:
     payload = {"prompt": workflow, "client_id": str(uuid.uuid4())}
     response = requests.post(f"{COMFY_BASE_URL}/prompt", json=payload, timeout=30)
+    if response.status_code >= 400:
+        log_event(
+            "prompt.submission_failed",
+            request_id=request_id,
+            status_code=response.status_code,
+            response_text=response.text,
+        )
     response.raise_for_status()
     data = response.json()
     log_event(

@@ -792,24 +792,12 @@ def _extract_image_metadata(history: dict, *, request_id=None, prompt_id=None) -
             summary=summary,
             include_resources=True,
         )
-        dump_dir = Path(os.getenv("COMFY_HISTORY_DUMP", "/tmp/comfyui-history"))
-        dump_path = dump_dir / f"history_{prompt_id or uuid.uuid4().hex}.json"
-        try:
-            dump_dir.mkdir(parents=True, exist_ok=True)
-            dump_path.write_text(json.dumps(history, default=str))
-            log_event(
-                "prompt.history.dumped",
-                request_id=request_id,
-                prompt_id=prompt_id,
-                dump_path=str(dump_path),
-            )
-        except Exception as dump_exc:  # noqa: BLE001
-            log_event(
-                "prompt.history.dump_failed",
-                request_id=request_id,
-                prompt_id=prompt_id,
-                error=str(dump_exc),
-            )
+        log_event(
+            "prompt.history.raw",
+            request_id=request_id,
+            prompt_id=prompt_id,
+            history=history,
+        )
         raise RuntimeError(f"ComfyUI produced no images: {summary}")
     image_meta = images[0]
     log_event(

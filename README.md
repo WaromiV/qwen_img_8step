@@ -11,9 +11,10 @@ The Docker image also sets `NVIDIA_DISABLE_REQUIRE=1` to bypass the base image's
 This repo no longer uses Diffusers.
 
 - Runtime stack: `ComfyUI` + `ComfyUI-GGUF`
-- Quantized model: `qwen-image-edit-2511-Q2_K.gguf`
+- Diffusion model: `qwen_image_edit_2509_fp8_e4m3fn.safetensors`
 - Text encoder: `qwen_2.5_vl_7b_fp8_scaled.safetensors`
 - VAE: `qwen_image_vae.safetensors`
+- Lightning LoRA: `Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors`
 - Base image: `runpod/worker-comfyui:5.5.1-base`
 - Custom node source: `city96/ComfyUI-GGUF`
 

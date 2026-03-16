@@ -11,6 +11,7 @@ import threading
 import time
 import uuid
 from pathlib import Path
+from typing import Optional
 from urllib.parse import urlencode
 
 import requests
@@ -24,7 +25,8 @@ COMFY_BASE_URL = f"http://{COMFY_HOST}:{COMFY_PORT}"
 WORKFLOW_PATH = Path(
     os.getenv("WORKFLOW_PATH", "/app/workflow/02_qwen_Image_edit_subgraphed.json")
 )
-GGUF_FILENAME = "qwen-image-edit-2511-Q2_K.gguf"
+DIFF_MODEL_FILENAME = "qwen_image_edit_2509_fp8_e4m3fn.safetensors"
+LORA_FILENAME = "Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors"
 TEXT_ENCODER_FILENAME = "qwen_2.5_vl_7b_fp8_scaled.safetensors"
 VAE_FILENAME = "qwen_image_vae.safetensors"
 DEFAULT_STEPS = int(os.getenv("DEFAULT_STEPS", "20"))
@@ -46,9 +48,9 @@ else:
 
 MODEL_SPECS = [
     {
-        "filename": GGUF_FILENAME,
-        "url": f"https://huggingface.co/unsloth/Qwen-Image-Edit-2511-GGUF/resolve/main/{GGUF_FILENAME}",
-        "subdir": "unet",
+        "filename": DIFF_MODEL_FILENAME,
+        "url": "https://huggingface.co/Comfy-Org/Qwen-Image-Edit_ComfyUI/resolve/main/split_files/diffusion_models/qwen_image_edit_2509_fp8_e4m3fn.safetensors",
+        "subdir": "diffusion_models",
     },
     {
         "filename": TEXT_ENCODER_FILENAME,
@@ -60,11 +62,16 @@ MODEL_SPECS = [
         "url": "https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/resolve/main/split_files/vae/qwen_image_vae.safetensors",
         "subdir": "vae",
     },
+    {
+        "filename": LORA_FILENAME,
+        "url": "https://huggingface.co/lightx2v/Qwen-Image-Lightning/resolve/main/Qwen-Image-Edit-2509/Qwen-Image-Edit-2509-Lightning-4steps-V1.0-bf16.safetensors",
+        "subdir": "loras",
+    },
 ]
 
 BOOT_MONO = time.monotonic()
 START_LOCK = threading.Lock()
-SERVER_PROCESS = None
+SERVER_PROCESS: Optional[subprocess.Popen] = None
 
 
 def _iso_timestamp() -> str:
@@ -357,11 +364,12 @@ def warmup_model(*, request_id=None) -> None:
     global SERVER_PROCESS
     with START_LOCK:
         if _server_alive():
+            comfy_pid = SERVER_PROCESS.pid if SERVER_PROCESS else None
             log_event(
                 "warmup.skip",
                 request_id=request_id,
                 reason="server_already_alive",
-                comfy_pid=SERVER_PROCESS.pid,
+                comfy_pid=comfy_pid,
                 include_resources=True,
             )
             return
@@ -393,17 +401,18 @@ def warmup_model(*, request_id=None) -> None:
                 stderr=subprocess.STDOUT,
                 env=os.environ.copy(),
             )
+        comfy_pid_runtime = SERVER_PROCESS.pid
         log_event(
             "comfy.process.spawned",
             request_id=request_id,
-            comfy_pid=SERVER_PROCESS.pid,
+            comfy_pid=comfy_pid_runtime,
         )
         _wait_until_ready(request_id=request_id)
         log_event(
             "warmup.done",
             request_id=request_id,
             elapsed_s=round(time.monotonic() - warmup_started, 3),
-            comfy_pid=SERVER_PROCESS.pid,
+            comfy_pid=comfy_pid_runtime,
             include_resources=True,
         )
 
@@ -500,21 +509,36 @@ def _patch_workflow(
     request_id=None,
 ) -> dict:
     patched = copy.deepcopy(workflow)
-    patched["1"]["inputs"]["image"] = input_filename
-    patched["3"]["inputs"]["unet_name"] = GGUF_FILENAME
-    patched["6"]["inputs"]["clip_name"] = TEXT_ENCODER_FILENAME
-    patched["7"]["inputs"]["vae_name"] = VAE_FILENAME
-    patched["8"]["inputs"]["prompt"] = prompt
-    patched["10"]["inputs"]["prompt"] = " "
-    patched["13"]["inputs"]["seed"] = seed
-    patched["13"]["inputs"]["steps"] = steps
-    patched["13"]["inputs"]["cfg"] = true_cfg_scale
-    patched["13"]["inputs"]["sampler_name"] = "euler"
-    patched["13"]["inputs"]["scheduler"] = "simple"
-    patched["13"]["inputs"]["denoise"] = 1.0
-    patched["15"]["inputs"]["filename_prefix"] = filename_prefix
-    patched["16"]["inputs"]["width"] = width
-    patched["16"]["inputs"]["height"] = height
+    load_node = None
+    k_sampler_node = None
+    prompt_nodes = []
+
+    for node in patched.get("nodes", []):
+        node_type = node.get("type")
+        if node_type == "LoadImage" and load_node is None:
+            load_node = node
+        elif node_type == "KSampler":
+            k_sampler_node = node
+        elif node_type == "TextEncodeQwenImageEditPlus":
+            prompt_nodes.append(node)
+
+    if load_node and load_node.get("widgets_values"):
+        load_node["widgets_values"][0] = input_filename
+
+    for node in prompt_nodes:
+        node["widgets_values"] = [prompt]
+
+    if k_sampler_node:
+        k_sampler_node["widgets_values"] = [
+            seed,
+            "randomize",
+            steps,
+            true_cfg_scale,
+            "euler",
+            "simple",
+            1.0,
+        ]
+
     log_event(
         "workflow.patched",
         request_id=request_id,
@@ -690,7 +714,7 @@ def edit_image(job_input: dict, *, request_id=None) -> dict:
 
     result = {
         "ok": True,
-        "model_id": f"unsloth/Qwen-Image-Edit-2511-GGUF::{GGUF_FILENAME}",
+        "model_id": f"Comfy-Org/Qwen-Image-Edit_ComfyUI::{DIFF_MODEL_FILENAME}",
         "runtime": "comfyui-gguf",
         "seed": seed,
         "num_inference_steps": steps,

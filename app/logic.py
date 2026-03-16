@@ -605,8 +605,18 @@ def _convert_blueprint_to_prompt_payload(workflow: dict) -> dict:
     }
     links = workflow.get("links", []) or []
     link_map: dict[int, tuple[str, int]] = {}
+    allowed_node_ids = {
+        str(node["id"])
+        for node in workflow.get("nodes", [])
+        if node.get("type") in allowed_types
+    }
     for entry in links:
-        link_id, src_node, src_output, _, _, _ = entry
+        link_id, src_node, src_output, dest_node, _, _ = entry
+        if (
+            str(src_node) not in allowed_node_ids
+            or str(dest_node) not in allowed_node_ids
+        ):
+            continue
         link_map[link_id] = (str(src_node), src_output)
 
     prompt_nodes: dict[str, dict] = {}

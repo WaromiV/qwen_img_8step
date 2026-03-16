@@ -781,7 +781,7 @@ def _summarize_history_error(history: dict) -> dict:
     return summary
 
 
-def _extract_image_metadata(history: dict, *, request_id=None) -> dict:
+def _extract_image_metadata(history: dict, *, request_id=None, prompt_id=None) -> dict:
     outputs = history.get("outputs") or {}
     images = (outputs.get("15") or {}).get("images") or []
     if not images:
@@ -792,6 +792,24 @@ def _extract_image_metadata(history: dict, *, request_id=None) -> dict:
             summary=summary,
             include_resources=True,
         )
+        dump_dir = Path(os.getenv("COMFY_HISTORY_DUMP", "/tmp/comfyui-history"))
+        dump_path = dump_dir / f"history_{prompt_id or uuid.uuid4().hex}.json"
+        try:
+            dump_dir.mkdir(parents=True, exist_ok=True)
+            dump_path.write_text(json.dumps(history, default=str))
+            log_event(
+                "prompt.history.dumped",
+                request_id=request_id,
+                prompt_id=prompt_id,
+                dump_path=str(dump_path),
+            )
+        except Exception as dump_exc:  # noqa: BLE001
+            log_event(
+                "prompt.history.dump_failed",
+                request_id=request_id,
+                prompt_id=prompt_id,
+                error=str(dump_exc),
+            )
         raise RuntimeError(f"ComfyUI produced no images: {summary}")
     image_meta = images[0]
     log_event(
@@ -863,7 +881,9 @@ def edit_image(job_input: dict, *, request_id=None) -> dict:
         workflow, input_filename=input_filename, request_id=request_id
     )
     history = _poll_history(prompt_id, request_id=request_id)
-    image_meta = _extract_image_metadata(history, request_id=request_id)
+    image_meta = _extract_image_metadata(
+        history, request_id=request_id, prompt_id=prompt_id
+    )
     output_bytes = _fetch_output_image(image_meta, request_id=request_id)
     output_image = Image.open(io.BytesIO(output_bytes))
 

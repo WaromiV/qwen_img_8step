@@ -585,35 +585,51 @@ def _patch_workflow(
 
 
 def _convert_blueprint_to_prompt_payload(workflow: dict) -> dict:
+    allowed_types = {
+        "LoadImage",
+        "FluxKontextImageScale",
+        "ImageScaleToTotalPixels",
+        "UNETLoader",
+        "LoraLoaderModelOnly",
+        "ModelSamplingAuraFlow",
+        "CFGNorm",
+        "CLIPLoader",
+        "VAELoader",
+        "TextEncodeQwenImageEditPlus",
+        "FluxKontextMultiReferenceLatentMethod",
+        "VAEEncode",
+        "EmptySD3LatentImage",
+        "KSampler",
+        "VAEDecode",
+        "SaveImage",
+    }
     links = workflow.get("links", []) or []
     link_map: dict[int, tuple[str, int]] = {}
-    for link in links:
-        link_id, src_node, src_output, _, _, _ = link
+    for entry in links:
+        link_id, src_node, src_output, _, _, _ = entry
         link_map[link_id] = (str(src_node), src_output)
 
     prompt_nodes: dict[str, dict] = {}
     for node in workflow.get("nodes", []):
+        node_type = node.get("type")
+        if node_type not in allowed_types:
+            continue
         node_id = str(node["id"])
-        converted = {"class_type": node.get("type"), "inputs": {}}
-
-        if node.get("type") == "LoadImage":
-            widgets = node.get("widgets_values") or []
-            if widgets:
-                converted["inputs"]["image"] = widgets[0]
-
+        converted = {"class_type": node_type, "inputs": {}}
         for inp in node.get("inputs", []):
             name = inp.get("name")
             if not name:
                 continue
-            if "link" in inp and inp["link"] in link_map:
-                converted["inputs"][name] = link_map[inp["link"]]
-            elif "value" in inp:
+            if "link" in inp:
+                link_ref = link_map.get(inp["link"])
+                if link_ref:
+                    converted["inputs"][name] = [link_ref[0], link_ref[1]]
+                continue
+            if "value" in inp:
                 converted["inputs"][name] = inp["value"]
             elif "default_value" in inp:
                 converted["inputs"][name] = inp["default_value"]
-
         prompt_nodes[node_id] = converted
-
     return prompt_nodes
 
 

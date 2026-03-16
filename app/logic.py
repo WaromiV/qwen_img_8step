@@ -579,6 +579,15 @@ def _patch_workflow(
                     break
             else:
                 inputs.append({"name": "filename_prefix", "value": filename_prefix})
+        elif node.get("type") == "LoadImage":
+            node["widgets_values"] = [input_filename]
+            inputs = node.setdefault("inputs", [])
+            for inp in inputs:
+                if inp.get("name") == "image":
+                    inp["value"] = input_filename
+                    break
+            else:
+                inputs.append({"name": "image", "value": input_filename})
 
     log_event(
         "workflow.patched",
@@ -595,7 +604,9 @@ def _patch_workflow(
     return patched
 
 
-def _convert_blueprint_to_prompt_payload(workflow: dict) -> dict:
+def _convert_blueprint_to_prompt_payload(
+    workflow: dict, *, input_filename: str | None = None
+) -> dict:
     allowed_types = {
         "LoadImage",
         "FluxKontextImageScale",
@@ -653,8 +664,10 @@ def _convert_blueprint_to_prompt_payload(workflow: dict) -> dict:
             elif "default_value" in inp:
                 inputs[name] = inp["default_value"]
 
-        if node_type == "LoadImage" and widgets:
-            inputs.setdefault("image", widgets[0])
+        if node_type == "LoadImage":
+            target_image = input_filename or (widgets[0] if widgets else None)
+            if target_image:
+                inputs.setdefault("image", target_image)
         if node_type == "ImageScaleToTotalPixels" and widgets:
             inputs.setdefault("upscale_method", widgets[0])
             if len(widgets) > 1:
@@ -663,7 +676,7 @@ def _convert_blueprint_to_prompt_payload(workflow: dict) -> dict:
                 inputs.setdefault("helper", widgets[2])
         if node_type == "UNETLoader":
             inputs.setdefault("unet_name", DIFF_MODEL_FILENAME)
-            inputs.setdefault("weight_dtype", "fp8")
+            inputs.setdefault("weight_dtype", "fp8_e4m3fn")
         if node_type == "LoraLoaderModelOnly":
             inputs.setdefault("lora_name", LORA_FILENAME)
             inputs.setdefault("strength_model", widgets[1] if len(widgets) > 1 else 1)
@@ -684,8 +697,10 @@ def _convert_blueprint_to_prompt_payload(workflow: dict) -> dict:
     return prompt_nodes
 
 
-def _submit_prompt(workflow: dict, *, request_id=None) -> str:
-    prompt_payload = _convert_blueprint_to_prompt_payload(workflow)
+def _submit_prompt(workflow: dict, *, input_filename: str, request_id=None) -> str:
+    prompt_payload = _convert_blueprint_to_prompt_payload(
+        workflow, input_filename=input_filename
+    )
     payload = {"prompt": prompt_payload, "client_id": str(uuid.uuid4())}
     response = requests.post(f"{COMFY_BASE_URL}/prompt", json=payload, timeout=30)
     if response.status_code >= 400:
@@ -844,7 +859,9 @@ def edit_image(job_input: dict, *, request_id=None) -> dict:
         filename_prefix=f"QwenImageEditGGUF_{job_id}",
         request_id=request_id,
     )
-    prompt_id = _submit_prompt(workflow, request_id=request_id)
+    prompt_id = _submit_prompt(
+        workflow, input_filename=input_filename, request_id=request_id
+    )
     history = _poll_history(prompt_id, request_id=request_id)
     image_meta = _extract_image_metadata(history, request_id=request_id)
     output_bytes = _fetch_output_image(image_meta, request_id=request_id)

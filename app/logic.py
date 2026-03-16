@@ -569,6 +569,17 @@ def _patch_workflow(
             else:
                 inputs.append({"name": name, "value": value})
 
+    for node in patched.get("nodes", []):
+        if node.get("type") == "SaveImage":
+            node["widgets_values"] = [filename_prefix]
+            inputs = node.setdefault("inputs", [])
+            for inp in inputs:
+                if inp.get("name") == "filename_prefix":
+                    inp["value"] = filename_prefix
+                    break
+            else:
+                inputs.append({"name": "filename_prefix", "value": filename_prefix})
+
     log_event(
         "workflow.patched",
         request_id=request_id,
@@ -626,6 +637,8 @@ def _convert_blueprint_to_prompt_payload(workflow: dict) -> dict:
             continue
         node_id = str(node["id"])
         converted = {"class_type": node_type, "inputs": {}}
+        inputs = converted["inputs"]
+        widgets = node.get("widgets_values") or []
         for inp in node.get("inputs", []):
             name = inp.get("name")
             if not name:
@@ -633,12 +646,40 @@ def _convert_blueprint_to_prompt_payload(workflow: dict) -> dict:
             if "link" in inp:
                 link_ref = link_map.get(inp["link"])
                 if link_ref:
-                    converted["inputs"][name] = [link_ref[0], link_ref[1]]
+                    inputs[name] = [link_ref[0], link_ref[1]]
                 continue
             if "value" in inp:
-                converted["inputs"][name] = inp["value"]
+                inputs[name] = inp["value"]
             elif "default_value" in inp:
-                converted["inputs"][name] = inp["default_value"]
+                inputs[name] = inp["default_value"]
+
+        if node_type == "LoadImage" and widgets:
+            inputs.setdefault("image", widgets[0])
+        if node_type == "ImageScaleToTotalPixels" and widgets:
+            inputs.setdefault("upscale_method", widgets[0])
+            if len(widgets) > 1:
+                inputs.setdefault("megapixels", widgets[1])
+            if len(widgets) > 2:
+                inputs.setdefault("helper", widgets[2])
+        if node_type == "UNETLoader":
+            inputs.setdefault("unet_name", DIFF_MODEL_FILENAME)
+            inputs.setdefault("weight_dtype", "fp8")
+        if node_type == "LoraLoaderModelOnly":
+            inputs.setdefault("lora_name", LORA_FILENAME)
+            inputs.setdefault("strength_model", widgets[1] if len(widgets) > 1 else 1)
+        if node_type == "ModelSamplingAuraFlow" and widgets:
+            inputs.setdefault("shift", widgets[0])
+        if node_type == "CFGNorm" and widgets:
+            inputs.setdefault("strength", widgets[0])
+        if node_type == "CLIPLoader":
+            inputs.setdefault("clip_name", TEXT_ENCODER_FILENAME)
+            inputs.setdefault("type", widgets[1] if len(widgets) > 1 else "qwen_image")
+            inputs.setdefault("device", "default")
+        if node_type == "VAELoader":
+            inputs.setdefault("vae_name", widgets[0] if widgets else VAE_FILENAME)
+        if node_type == "SaveImage" and widgets:
+            inputs.setdefault("filename_prefix", widgets[0])
+
         prompt_nodes[node_id] = converted
     return prompt_nodes
 

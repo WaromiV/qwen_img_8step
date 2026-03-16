@@ -524,9 +524,24 @@ def _patch_workflow(
 
     if load_node and load_node.get("widgets_values"):
         load_node["widgets_values"][0] = input_filename
+    if load_node is not None:
+        inputs = load_node.setdefault("inputs", [])
+        for inp in inputs:
+            if inp["name"] == "image":
+                inp["value"] = input_filename
+                break
+        else:
+            inputs.append({"name": "image", "value": input_filename})
 
     for node in prompt_nodes:
         node["widgets_values"] = [prompt]
+        inputs = node.setdefault("inputs", [])
+        for inp in inputs:
+            if inp["name"] == "prompt":
+                inp["value"] = prompt
+                break
+        else:
+            inputs.append({"name": "prompt", "value": prompt})
 
     if k_sampler_node:
         k_sampler_node["widgets_values"] = [
@@ -538,6 +553,21 @@ def _patch_workflow(
             "simple",
             1.0,
         ]
+        inputs = k_sampler_node.setdefault("inputs", [])
+        overrides = [
+            ("seed", seed),
+            ("steps", steps),
+            ("cfg", true_cfg_scale),
+            ("sampler_name", "euler"),
+            ("scheduler", "simple"),
+            ("denoise", 1.0),
+        ]
+        existing = {inp["name"]: inp for inp in inputs}
+        for name, value in overrides:
+            if name in existing:
+                existing[name]["value"] = value
+            else:
+                inputs.append({"name": name, "value": value})
 
     log_event(
         "workflow.patched",
@@ -554,8 +584,42 @@ def _patch_workflow(
     return patched
 
 
+def _convert_blueprint_to_prompt_payload(workflow: dict) -> dict:
+    links = workflow.get("links", []) or []
+    link_map: dict[int, tuple[str, int]] = {}
+    for link in links:
+        link_id, src_node, src_output, _, _, _ = link
+        link_map[link_id] = (str(src_node), src_output)
+
+    prompt_nodes: dict[str, dict] = {}
+    for node in workflow.get("nodes", []):
+        node_id = str(node["id"])
+        converted = {"class_type": node.get("type"), "inputs": {}}
+
+        if node.get("type") == "LoadImage":
+            widgets = node.get("widgets_values") or []
+            if widgets:
+                converted["inputs"]["image"] = widgets[0]
+
+        for inp in node.get("inputs", []):
+            name = inp.get("name")
+            if not name:
+                continue
+            if "link" in inp and inp["link"] in link_map:
+                converted["inputs"][name] = link_map[inp["link"]]
+            elif "value" in inp:
+                converted["inputs"][name] = inp["value"]
+            elif "default_value" in inp:
+                converted["inputs"][name] = inp["default_value"]
+
+        prompt_nodes[node_id] = converted
+
+    return prompt_nodes
+
+
 def _submit_prompt(workflow: dict, *, request_id=None) -> str:
-    payload = {"prompt": workflow, "client_id": str(uuid.uuid4())}
+    prompt_payload = _convert_blueprint_to_prompt_payload(workflow)
+    payload = {"prompt": prompt_payload, "client_id": str(uuid.uuid4())}
     response = requests.post(f"{COMFY_BASE_URL}/prompt", json=payload, timeout=30)
     if response.status_code >= 400:
         log_event(
